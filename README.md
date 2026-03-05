@@ -2,6 +2,8 @@
 
 CLI tool for Hurricane Electric hosted DNS management.
 
+[中文文档](README.zh-CN.md)
+
 ## Installation
 
 ```bash
@@ -34,6 +36,8 @@ henetdns login --username your@email.com
 ```bash
 henetdns zones list
 henetdns zones list --json
+henetdns zones list --cache-only
+henetdns zones list --refresh
 ```
 
 ### List Records
@@ -41,7 +45,16 @@ henetdns zones list --json
 ```bash
 henetdns records list --zone example.com
 henetdns records list --zone 123456 --json
+henetdns records list --zone example.com --cache-only
+henetdns records list --zone example.com --refresh
 ```
+
+### Cache Behavior
+
+- Default list behavior is cache-first. It reads local SQLite cache first, then falls back to remote fetch when cache is empty.
+- `--cache-only` reads only local cache and never sends remote requests.
+- `--refresh` bypasses local cache, always fetches from remote, and refreshes cache.
+- `--cache-only` and `--refresh` cannot be used together.
 
 ### Upsert Record
 
