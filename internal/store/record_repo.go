@@ -78,3 +78,56 @@ func (r *RecordRepo) ReplaceAllForZone(ctx context.Context, zoneID string, recor
 	}
 	return nil
 }
+
+func (r *RecordRepo) ListByZone(ctx context.Context, zoneID string) ([]model.Record, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT record_uid, record_id, name, type, value, ttl, priority, dynamic, locked, last_synced_at
+		FROM records_cache
+		WHERE zone_id = ?
+		ORDER BY lower(name), lower(type), record_id
+	`, zoneID)
+	if err != nil {
+		return nil, fmt.Errorf("query records cache: %w: %w", err, errs.ErrStore)
+	}
+	defer rows.Close()
+
+	var records []model.Record
+	for rows.Next() {
+		var (
+			record model.Record
+			prio   sql.NullInt64
+			synced string
+			dyn    int
+			locked int
+		)
+		if err := rows.Scan(
+			&record.RecordUID,
+			&record.RecordID,
+			&record.Name,
+			&record.Type,
+			&record.Value,
+			&record.TTL,
+			&prio,
+			&dyn,
+			&locked,
+			&synced,
+		); err != nil {
+			return nil, fmt.Errorf("scan records cache: %w: %w", err, errs.ErrStore)
+		}
+		record.ZoneID = zoneID
+		if prio.Valid {
+			p := int(prio.Int64)
+			record.Priority = &p
+		}
+		record.Dynamic = dyn != 0
+		record.Locked = locked != 0
+		if ts, err := parseCacheTime(synced); err == nil {
+			record.LastSyncedAt = ts
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate records cache: %w: %w", err, errs.ErrStore)
+	}
+	return records, nil
+}

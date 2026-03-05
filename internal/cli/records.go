@@ -22,6 +22,8 @@ func newRecordsCmd() *cobra.Command {
 func newRecordsListCmd() *cobra.Command {
 	var zone string
 	var jsonOut bool
+	var cacheOnly bool
+	var refresh bool
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List records in a zone",
@@ -29,15 +31,63 @@ func newRecordsListCmd() *cobra.Command {
 			if zone == "" {
 				return fmt.Errorf("--zone is required: %w", errs.ErrInvalidInput)
 			}
+			if cacheOnly && refresh {
+				return fmt.Errorf("--cache-only and --refresh cannot be used together: %w", errs.ErrInvalidInput)
+			}
 			return app.WithRuntime(cfg, func(rt *app.Runtime) error {
-				if err := rt.Auth.EnsureSession(cmd.Context(), cfg.Username); err != nil {
-					return err
+				ensured := false
+				ensureSession := func() error {
+					if ensured {
+						return nil
+					}
+					if err := rt.Auth.EnsureSession(cmd.Context(), cfg.Username); err != nil {
+						return err
+					}
+					ensured = true
+					return nil
 				}
-				zoneID, err := rt.HENet.ResolveZoneID(cmd.Context(), zone)
+
+				if refresh {
+					if err := ensureSession(); err != nil {
+						return err
+					}
+					zoneID, err := rt.HENet.ResolveZoneID(cmd.Context(), zone)
+					if err != nil {
+						return err
+					}
+					records, err := rt.HENet.ListRecords(cmd.Context(), zoneID)
+					if err != nil {
+						return err
+					}
+					return output.PrintRecords(cmd.OutOrStdout(), records, jsonOut)
+				}
+
+				zoneID, err := rt.HENet.ResolveZoneIDFromCache(cmd.Context(), zone)
+				if err != nil {
+					if cacheOnly {
+						return err
+					}
+					if err := ensureSession(); err != nil {
+						return err
+					}
+					zoneID, err = rt.HENet.ResolveZoneID(cmd.Context(), zone)
+					if err != nil {
+						return err
+					}
+				}
+
+				records, err := rt.HENet.ListRecordsFromCache(cmd.Context(), zoneID)
 				if err != nil {
 					return err
 				}
-				records, err := rt.HENet.ListRecords(cmd.Context(), zoneID)
+				if cacheOnly || len(records) > 0 {
+					return output.PrintRecords(cmd.OutOrStdout(), records, jsonOut)
+				}
+
+				if err := ensureSession(); err != nil {
+					return err
+				}
+				records, err = rt.HENet.ListRecords(cmd.Context(), zoneID)
 				if err != nil {
 					return err
 				}
@@ -47,6 +97,8 @@ func newRecordsListCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&zone, "zone", "", "zone name or zone id")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output as JSON")
+	cmd.Flags().BoolVar(&cacheOnly, "cache-only", false, "read only from local cache; do not request remote")
+	cmd.Flags().BoolVar(&refresh, "refresh", false, "bypass local cache and fetch from remote")
 	return cmd
 }
 

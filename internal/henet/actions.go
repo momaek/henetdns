@@ -52,6 +52,21 @@ func (s *Service) ListZones(ctx context.Context) ([]model.Zone, error) {
 	return zones, nil
 }
 
+func (s *Service) ListZonesFromCache(ctx context.Context) ([]model.Zone, error) {
+	if s.zoneRepo == nil {
+		return nil, nil
+	}
+	return s.zoneRepo.List(ctx)
+}
+
+func (s *Service) ListZonesCachedFirst(ctx context.Context) ([]model.Zone, error) {
+	zones, err := s.ListZonesFromCache(ctx)
+	if err == nil && len(zones) > 0 {
+		return zones, nil
+	}
+	return s.ListZones(ctx)
+}
+
 func (s *Service) ResolveZoneID(ctx context.Context, zoneOrID string) (string, error) {
 	zoneOrID = strings.TrimSpace(zoneOrID)
 	if zoneOrID == "" {
@@ -72,6 +87,25 @@ func (s *Service) ResolveZoneID(ctx context.Context, zoneOrID string) (string, e
 	return "", fmt.Errorf("zone %q not found: %w", zoneOrID, errs.ErrInvalidInput)
 }
 
+func (s *Service) ResolveZoneIDFromCache(ctx context.Context, zoneOrID string) (string, error) {
+	zoneOrID = strings.TrimSpace(zoneOrID)
+	if zoneOrID == "" {
+		return "", fmt.Errorf("zone is required: %w", errs.ErrInvalidInput)
+	}
+	if isDigits(zoneOrID) {
+		return zoneOrID, nil
+	}
+	if s.zoneRepo == nil {
+		return "", fmt.Errorf("zone %q not found: %w", zoneOrID, errs.ErrInvalidInput)
+	}
+	if id, found, err := s.zoneRepo.FindIDByName(ctx, zoneOrID); err != nil {
+		return "", err
+	} else if found {
+		return id, nil
+	}
+	return "", fmt.Errorf("zone %q not found in cache: %w", zoneOrID, errs.ErrInvalidInput)
+}
+
 func (s *Service) ListRecords(ctx context.Context, zoneID string) ([]model.Record, error) {
 	resp, err := s.client.Get(ctx, ZonePagePath(zoneID), s.client.BaseURL().String())
 	if err != nil {
@@ -88,6 +122,21 @@ func (s *Service) ListRecords(ctx context.Context, zoneID string) ([]model.Recor
 		_ = s.recordRepo.ReplaceAllForZone(ctx, zoneID, records, time.Now().UTC())
 	}
 	return records, nil
+}
+
+func (s *Service) ListRecordsFromCache(ctx context.Context, zoneID string) ([]model.Record, error) {
+	if s.recordRepo == nil {
+		return nil, nil
+	}
+	return s.recordRepo.ListByZone(ctx, zoneID)
+}
+
+func (s *Service) ListRecordsCachedFirst(ctx context.Context, zoneID string) ([]model.Record, error) {
+	records, err := s.ListRecordsFromCache(ctx, zoneID)
+	if err == nil && len(records) > 0 {
+		return records, nil
+	}
+	return s.ListRecords(ctx, zoneID)
 }
 
 func (s *Service) UpsertRecord(ctx context.Context, zoneID string, in RecordInput) error {

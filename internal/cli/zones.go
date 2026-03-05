@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"github.com/wentx/henetdns/internal/app"
+	"github.com/wentx/henetdns/internal/errs"
 	"github.com/wentx/henetdns/internal/output"
 )
 
@@ -15,15 +18,39 @@ func newZonesCmd() *cobra.Command {
 
 func newZonesListCmd() *cobra.Command {
 	var jsonOut bool
+	var cacheOnly bool
+	var refresh bool
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List zones",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cacheOnly && refresh {
+				return fmt.Errorf("--cache-only and --refresh cannot be used together: %w", errs.ErrInvalidInput)
+			}
 			return app.WithRuntime(cfg, func(rt *app.Runtime) error {
+				if refresh {
+					if err := rt.Auth.EnsureSession(cmd.Context(), cfg.Username); err != nil {
+						return err
+					}
+					zones, err := rt.HENet.ListZones(cmd.Context())
+					if err != nil {
+						return err
+					}
+					return output.PrintZones(cmd.OutOrStdout(), zones, jsonOut)
+				}
+
+				zones, err := rt.HENet.ListZonesFromCache(cmd.Context())
+				if err != nil {
+					return err
+				}
+				if cacheOnly || len(zones) > 0 {
+					return output.PrintZones(cmd.OutOrStdout(), zones, jsonOut)
+				}
+
 				if err := rt.Auth.EnsureSession(cmd.Context(), cfg.Username); err != nil {
 					return err
 				}
-				zones, err := rt.HENet.ListZones(cmd.Context())
+				zones, err = rt.HENet.ListZones(cmd.Context())
 				if err != nil {
 					return err
 				}
@@ -32,5 +59,7 @@ func newZonesListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output as JSON")
+	cmd.Flags().BoolVar(&cacheOnly, "cache-only", false, "read only from local cache; do not request remote")
+	cmd.Flags().BoolVar(&refresh, "refresh", false, "bypass local cache and fetch from remote")
 	return cmd
 }
