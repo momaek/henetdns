@@ -27,7 +27,7 @@ Configure via command-line flags or environment variables:
 ### Login
 
 ```bash
-henetdns login --username your@email.com
+henetdns login --username your_username
 # Password will be prompted if not provided via --password or HE_PASS
 ```
 

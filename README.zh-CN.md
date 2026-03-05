@@ -27,7 +27,7 @@ go install github.com/wentx/henetdns/cmd/henetdns@latest
 ### 登录
 
 ```bash
-henetdns login --username your@email.com
+henetdns login --username your_username
 # 如果未通过 --password 或 HE_PASS 提供密码，会交互提示输入
 ```
 
