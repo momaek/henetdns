@@ -5,9 +5,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/wentx/henetdns/internal/app"
-	"github.com/wentx/henetdns/internal/errs"
-	"github.com/wentx/henetdns/internal/output"
+	"github.com/momaek/henetdns/internal/app"
+	"github.com/momaek/henetdns/internal/errs"
+	"github.com/momaek/henetdns/internal/output"
 )
 
 func newZonesCmd() *cobra.Command {

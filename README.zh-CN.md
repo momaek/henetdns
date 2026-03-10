@@ -7,7 +7,7 @@
 ## 安装
 
 ```bash
-go install github.com/wentx/henetdns/cmd/henetdns@latest
+go install github.com/momaek/henetdns/cmd/henetdns@latest
 ```
 
 ## 配置

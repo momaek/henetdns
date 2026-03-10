@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wentx/henetdns/internal/errs"
-	"github.com/wentx/henetdns/internal/httpclient"
-	"github.com/wentx/henetdns/internal/model"
-	"github.com/wentx/henetdns/internal/store"
+	"github.com/momaek/henetdns/internal/errs"
+	"github.com/momaek/henetdns/internal/httpclient"
+	"github.com/momaek/henetdns/internal/model"
+	"github.com/momaek/henetdns/internal/store"
 )
 
 type Service struct {

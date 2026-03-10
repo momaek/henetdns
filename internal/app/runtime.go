@@ -3,11 +3,11 @@ package app
 import (
 	"fmt"
 
-	"github.com/wentx/henetdns/internal/auth"
-	"github.com/wentx/henetdns/internal/config"
-	"github.com/wentx/henetdns/internal/henet"
-	"github.com/wentx/henetdns/internal/httpclient"
-	"github.com/wentx/henetdns/internal/store"
+	"github.com/momaek/henetdns/internal/auth"
+	"github.com/momaek/henetdns/internal/config"
+	"github.com/momaek/henetdns/internal/henet"
+	"github.com/momaek/henetdns/internal/httpclient"
+	"github.com/momaek/henetdns/internal/store"
 )
 
 type Runtime struct {

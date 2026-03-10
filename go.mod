@@ -1,4 +1,4 @@
-module github.com/wentx/henetdns
+module github.com/momaek/henetdns
 
 go 1.24.3
 

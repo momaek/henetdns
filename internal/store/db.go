@@ -9,7 +9,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/wentx/henetdns/internal/errs"
+	"github.com/momaek/henetdns/internal/errs"
 )
 
 type DB struct {

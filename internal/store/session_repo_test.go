@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wentx/henetdns/internal/model"
+	"github.com/momaek/henetdns/internal/model"
 )
 
 func TestSessionUpsertGet(t *testing.T) {

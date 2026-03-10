@@ -8,7 +8,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/wentx/henetdns/internal/model"
+	"github.com/momaek/henetdns/internal/model"
 )
 
 func PrintZones(w io.Writer, zones []model.Zone, asJSON bool) error {

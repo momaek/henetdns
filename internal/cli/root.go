@@ -2,7 +2,7 @@ package cli
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/wentx/henetdns/internal/config"
+	"github.com/momaek/henetdns/internal/config"
 )
 
 var cfg config.Config

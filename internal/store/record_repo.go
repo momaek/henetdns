@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/wentx/henetdns/internal/errs"
-	"github.com/wentx/henetdns/internal/model"
+	"github.com/momaek/henetdns/internal/errs"
+	"github.com/momaek/henetdns/internal/model"
 )
 
 type RecordRepo struct {

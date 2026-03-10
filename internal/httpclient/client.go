@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wentx/henetdns/internal/errs"
+	"github.com/momaek/henetdns/internal/errs"
 )
 
 type Client struct {

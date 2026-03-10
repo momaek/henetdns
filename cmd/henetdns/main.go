@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/wentx/henetdns/internal/cli"
-	"github.com/wentx/henetdns/internal/errs"
+	"github.com/momaek/henetdns/internal/cli"
+	"github.com/momaek/henetdns/internal/errs"
 )
 
 func main() {

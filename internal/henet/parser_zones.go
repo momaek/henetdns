@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/wentx/henetdns/internal/errs"
-	"github.com/wentx/henetdns/internal/model"
+	"github.com/momaek/henetdns/internal/errs"
+	"github.com/momaek/henetdns/internal/model"
 )
 
 var zoneIDRe = regexp.MustCompile(`hosted_dns_zoneid=(\d+)`)

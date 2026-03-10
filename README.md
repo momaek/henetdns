@@ -7,7 +7,7 @@ CLI tool for Hurricane Electric hosted DNS management.
 ## Installation
 
 ```bash
-go install github.com/wentx/henetdns/cmd/henetdns@latest
+go install github.com/momaek/henetdns/cmd/henetdns@latest
 ```
 
 ## Configuration
