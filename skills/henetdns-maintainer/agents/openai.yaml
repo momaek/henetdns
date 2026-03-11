@@ -1,0 +1,4 @@
+interface:
+  display_name: "HE DNS Maintainer"
+  short_description: "Guide agents editing the henetdns Go CLI"
+  default_prompt: "Use $henetdns-maintainer to inspect, modify, and validate the henetdns Go CLI safely."
