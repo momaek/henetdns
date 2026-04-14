@@ -97,6 +97,52 @@ henetdns records delete \
 - CNAME
 - MX
 
+## MCP Server
+
+henetdns can run as a [Model Context Protocol (MCP)](https://modelcontextprotocol.io) stdio server, exposing DNS management as tools for AI agents (e.g. Claude Desktop).
+
+### Setup
+
+**1. Login once via CLI:**
+
+```bash
+henetdns login --username your_username
+```
+
+The session cookie is saved to SQLite. The MCP server reuses it automatically — credentials never enter the MCP layer.
+
+**2. Start the server:**
+
+```bash
+henetdns mcp serve
+```
+
+### Claude Desktop Configuration
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "henetdns": {
+      "command": "henetdns",
+      "args": ["mcp", "serve"]
+    }
+  }
+}
+```
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `list_zones` | List all DNS zones. Uses cache by default; `refresh: true` fetches from HE.net. |
+| `list_records` | List records for a zone (by name or ID). Cache-first; supports `refresh`. |
+| `upsert_record` | Create a record if it doesn't already exist (idempotent). |
+| `delete_record` | Delete an exact matching record. |
+
+If the session expires, tools return: `"No active session. Run 'henetdns login' to authenticate, then retry."` — re-run `henetdns login` and the server resumes without restart.
+
 ## Data Storage
 
 Session cookies and cached data are stored in SQLite at `~/.config/henetdns/client.db` by default.

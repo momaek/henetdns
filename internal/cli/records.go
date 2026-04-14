@@ -119,7 +119,7 @@ func newRecordsUpsertCmd() *cobra.Command {
 				if err := rt.Auth.EnsureSession(cmd.Context(), cfg.Username); err != nil {
 					return err
 				}
-				zoneID, err := rt.HENet.ResolveZoneID(cmd.Context(), zone)
+				zoneID, err := rt.HENet.ResolveZoneIDCachedFirst(cmd.Context(), zone)
 				if err != nil {
 					return err
 				}
@@ -158,7 +158,7 @@ func newRecordsDeleteCmd() *cobra.Command {
 				if err := rt.Auth.EnsureSession(cmd.Context(), cfg.Username); err != nil {
 					return err
 				}
-				zoneID, err := rt.HENet.ResolveZoneID(cmd.Context(), zone)
+				zoneID, err := rt.HENet.ResolveZoneIDCachedFirst(cmd.Context(), zone)
 				if err != nil {
 					return err
 				}

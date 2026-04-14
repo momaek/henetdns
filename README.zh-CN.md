@@ -97,6 +97,52 @@ henetdns records delete \
 - CNAME
 - MX
 
+## MCP Server
+
+henetdns 支持以 [Model Context Protocol (MCP)](https://modelcontextprotocol.io) stdio server 模式运行，将 DNS 管理能力作为工具暴露给 AI Agent（如 Claude Desktop）。
+
+### 配置步骤
+
+**1. 通过 CLI 登录一次：**
+
+```bash
+henetdns login --username your_username
+```
+
+Session cookie 写入 SQLite，MCP server 自动复用，密码不会进入 MCP 层。
+
+**2. 启动 server：**
+
+```bash
+henetdns mcp serve
+```
+
+### Claude Desktop 配置
+
+添加到 `~/Library/Application Support/Claude/claude_desktop_config.json`（macOS）或 `%APPDATA%\Claude\claude_desktop_config.json`（Windows）：
+
+```json
+{
+  "mcpServers": {
+    "henetdns": {
+      "command": "henetdns",
+      "args": ["mcp", "serve"]
+    }
+  }
+}
+```
+
+### 可用工具
+
+| 工具 | 说明 |
+|------|------|
+| `list_zones` | 列出所有 DNS Zone。默认缓存优先，`refresh: true` 从 HE.net 拉取。 |
+| `list_records` | 列出指定 Zone 的记录（支持 Zone 名称或 ID）。缓存优先，支持 `refresh`。 |
+| `upsert_record` | 幂等创建记录，完全匹配时不重复创建。 |
+| `delete_record` | 删除精确匹配的记录。 |
+
+Session 过期时工具返回：`"No active session. Run 'henetdns login' to authenticate, then retry."` — 重新执行 `henetdns login` 即可，无需重启 server。
+
 ## 数据存储
 
 会话 Cookie 和缓存数据默认存储在 `~/.config/henetdns/client.db`。

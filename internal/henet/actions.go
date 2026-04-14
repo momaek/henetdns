@@ -106,6 +106,17 @@ func (s *Service) ResolveZoneIDFromCache(ctx context.Context, zoneOrID string) (
 	return "", fmt.Errorf("zone %q not found in cache: %w", zoneOrID, errs.ErrInvalidInput)
 }
 
+// ResolveZoneIDCachedFirst resolves a zone name to its ID using the local
+// cache first. Falls back to a remote fetch (which also refreshes the cache)
+// if the zone is not found locally.
+func (s *Service) ResolveZoneIDCachedFirst(ctx context.Context, zoneOrID string) (string, error) {
+	id, err := s.ResolveZoneIDFromCache(ctx, zoneOrID)
+	if err == nil {
+		return id, nil
+	}
+	return s.ResolveZoneID(ctx, zoneOrID)
+}
+
 func (s *Service) ListRecords(ctx context.Context, zoneID string) ([]model.Record, error) {
 	resp, err := s.client.Get(ctx, ZonePagePath(zoneID), s.client.BaseURL().String())
 	if err != nil {

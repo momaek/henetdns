@@ -16,6 +16,10 @@ import (
 	"github.com/momaek/henetdns/internal/store"
 )
 
+// sessionVerifyTTL is the window during which a previously verified session
+// is considered fresh and the GET / re-verification request is skipped.
+const sessionVerifyTTL = 5 * time.Minute
+
 type Service struct {
 	client      *httpclient.Client
 	sessionRepo *store.SessionRepo
@@ -110,6 +114,11 @@ func (s *Service) EnsureSession(ctx context.Context, username string) error {
 
 	if err := RestoreCookieJarForBaseURL(s.client.HTTPClient().Jar, s.client.BaseURL(), session.CookieJarJSON); err != nil {
 		return fmt.Errorf("restore cookie jar: %w", err)
+	}
+
+	// Skip the GET / round-trip when the session was verified recently.
+	if time.Since(session.LastVerifiedAt) < sessionVerifyTTL {
+		return nil
 	}
 
 	resp, err := s.client.Get(ctx, "/", "")

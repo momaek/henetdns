@@ -33,5 +33,6 @@ func newRootCmd() *cobra.Command {
 	cmd.AddCommand(newLoginCmd())
 	cmd.AddCommand(newZonesCmd())
 	cmd.AddCommand(newRecordsCmd())
+	cmd.AddCommand(newMCPCmd())
 	return cmd
 }
