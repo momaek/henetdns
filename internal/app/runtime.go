@@ -12,11 +12,10 @@ import (
 
 type Runtime struct {
 	Config      config.Config
-	Store       *store.DB
+	Store       *store.Store
 	SessionRepo *store.SessionRepo
 	ZoneRepo    *store.ZoneRepo
 	RecordRepo  *store.RecordRepo
-	AuditRepo   *store.AuditRepo
 	Auth        *auth.Service
 	HENet       *henet.Service
 }
@@ -25,39 +24,37 @@ func NewRuntime(cfg config.Config) (*Runtime, error) {
 	if err := config.ValidateCommon(cfg); err != nil {
 		return nil, err
 	}
-	db, err := store.Open(cfg.DBPath)
+	st, err := store.Open(cfg.DataDir)
 	if err != nil {
 		return nil, err
 	}
 
-	sessionRepo := store.NewSessionRepo(db.SQL())
-	zoneRepo := store.NewZoneRepo(db.SQL())
-	recordRepo := store.NewRecordRepo(db.SQL())
-	auditRepo := store.NewAuditRepo(db.SQL())
+	sessionRepo := store.NewSessionRepo(st)
+	zoneRepo := store.NewZoneRepo(st)
+	recordRepo := store.NewRecordRepo(st)
 
 	jar, err := auth.NewCookieJar()
 	if err != nil {
-		db.Close()
+		st.Close()
 		return nil, fmt.Errorf("init cookie jar: %w", err)
 	}
 
 	const userAgent = "henetdns/0.1"
 	client, err := httpclient.New(cfg.BaseURL, cfg.Timeout, jar, userAgent)
 	if err != nil {
-		db.Close()
+		st.Close()
 		return nil, err
 	}
 
-	authService := auth.NewService(client, sessionRepo, auditRepo, userAgent)
-	henetService := henet.NewService(client, zoneRepo, recordRepo, auditRepo)
+	authService := auth.NewService(client, sessionRepo, userAgent)
+	henetService := henet.NewService(client, zoneRepo, recordRepo)
 
 	return &Runtime{
 		Config:      cfg,
-		Store:       db,
+		Store:       st,
 		SessionRepo: sessionRepo,
 		ZoneRepo:    zoneRepo,
 		RecordRepo:  recordRepo,
-		AuditRepo:   auditRepo,
 		Auth:        authService,
 		HENet:       henetService,
 	}, nil

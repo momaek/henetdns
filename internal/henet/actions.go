@@ -18,7 +18,6 @@ type Service struct {
 	client     *httpclient.Client
 	zoneRepo   *store.ZoneRepo
 	recordRepo *store.RecordRepo
-	auditRepo  *store.AuditRepo
 }
 
 type RecordInput struct {
@@ -30,8 +29,8 @@ type RecordInput struct {
 	HasPriority bool
 }
 
-func NewService(client *httpclient.Client, zoneRepo *store.ZoneRepo, recordRepo *store.RecordRepo, auditRepo *store.AuditRepo) *Service {
-	return &Service{client: client, zoneRepo: zoneRepo, recordRepo: recordRepo, auditRepo: auditRepo}
+func NewService(client *httpclient.Client, zoneRepo *store.ZoneRepo, recordRepo *store.RecordRepo) *Service {
+	return &Service{client: client, zoneRepo: zoneRepo, recordRepo: recordRepo}
 }
 
 func (s *Service) ListZones(ctx context.Context) ([]model.Zone, error) {
@@ -185,21 +184,16 @@ func (s *Service) UpsertRecord(ctx context.Context, zoneID string, in RecordInpu
 
 	_, err = s.client.PostForm(ctx, "/index.cgi", form, s.client.BaseURL().String()+ZonePagePath(zoneID))
 	if err != nil {
-		s.audit(ctx, "upsert_record", &zoneID, "failed", err)
 		return err
 	}
 
 	records, err = s.ListRecords(ctx, zoneID)
 	if err != nil {
-		s.audit(ctx, "upsert_record", &zoneID, "failed", err)
 		return err
 	}
 	if _, found := findExactRecord(records, normalized); !found {
-		err = fmt.Errorf("record not found after upsert: %w", errs.ErrRemote)
-		s.audit(ctx, "upsert_record", &zoneID, "failed", err)
-		return err
+		return fmt.Errorf("record not found after upsert: %w", errs.ErrRemote)
 	}
-	s.audit(ctx, "upsert_record", &zoneID, "ok", nil)
 	return nil
 }
 
@@ -230,21 +224,16 @@ func (s *Service) DeleteRecord(ctx context.Context, zoneID string, in RecordInpu
 
 	_, err = s.client.PostForm(ctx, "/index.cgi", form, s.client.BaseURL().String()+ZonePagePath(zoneID))
 	if err != nil {
-		s.audit(ctx, "delete_record", &zoneID, "failed", err)
 		return err
 	}
 
 	records, err = s.ListRecords(ctx, zoneID)
 	if err != nil {
-		s.audit(ctx, "delete_record", &zoneID, "failed", err)
 		return err
 	}
 	if _, found := findExactRecord(records, normalized); found {
-		err = fmt.Errorf("record still exists after delete: %w", errs.ErrRemote)
-		s.audit(ctx, "delete_record", &zoneID, "failed", err)
-		return err
+		return fmt.Errorf("record still exists after delete: %w", errs.ErrRemote)
 	}
-	s.audit(ctx, "delete_record", &zoneID, "ok", nil)
 	return nil
 }
 
@@ -305,22 +294,4 @@ func isDigits(v string) bool {
 		}
 	}
 	return v != ""
-}
-
-func (s *Service) audit(ctx context.Context, action string, zoneID *string, status string, err error) {
-	if s.auditRepo == nil {
-		return
-	}
-	entry := model.AuditLog{
-		Action:             action,
-		ZoneID:             zoneID,
-		RequestSummaryJSON: "{}",
-		ResultStatus:       status,
-		CreatedAt:          time.Now().UTC(),
-	}
-	if err != nil {
-		msg := err.Error()
-		entry.ErrorMessage = &msg
-	}
-	_ = s.auditRepo.Insert(ctx, entry)
 }

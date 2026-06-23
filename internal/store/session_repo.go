@@ -2,65 +2,60 @@ package store
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
 	"time"
 
-	"github.com/momaek/henetdns/internal/errs"
 	"github.com/momaek/henetdns/internal/model"
 )
 
+// SessionRepo persists login sessions in <dir>/session.json. Sessions are keyed
+// by (base_url, username) so multiple accounts can coexist, but in practice a
+// CLI user has one.
 type SessionRepo struct {
-	db *sql.DB
+	st *Store
 }
 
-func NewSessionRepo(db *sql.DB) *SessionRepo {
-	return &SessionRepo{db: db}
+func NewSessionRepo(st *Store) *SessionRepo {
+	return &SessionRepo{st: st}
+}
+
+func (r *SessionRepo) load() ([]model.Session, error) {
+	var sessions []model.Session
+	if _, err := readJSON(r.st.sessionPath(), &sessions); err != nil {
+		return nil, err
+	}
+	return sessions, nil
 }
 
 func (r *SessionRepo) Get(ctx context.Context, baseURL, username string) (*model.Session, error) {
-	row := r.db.QueryRowContext(ctx, `
-		SELECT base_url, email, cookie_jar_json, user_agent, last_verified_at, created_at, updated_at
-		FROM sessions
-		WHERE base_url = ? AND email = ?
-	`, baseURL, username)
-	return scanSessionRow(row)
+	sessions, err := r.load()
+	if err != nil {
+		return nil, err
+	}
+	for i := range sessions {
+		if sessions[i].BaseURL == baseURL && sessions[i].Username == username {
+			s := sessions[i]
+			return &s, nil
+		}
+	}
+	return nil, nil
 }
 
 func (r *SessionRepo) GetLatestByBaseURL(ctx context.Context, baseURL string) (*model.Session, error) {
-	row := r.db.QueryRowContext(ctx, `
-		SELECT base_url, email, cookie_jar_json, user_agent, last_verified_at, created_at, updated_at
-		FROM sessions
-		WHERE base_url = ?
-		ORDER BY updated_at DESC
-		LIMIT 1
-	`, baseURL)
-	return scanSessionRow(row)
-}
-
-func scanSessionRow(row *sql.Row) (*model.Session, error) {
-	var s model.Session
-	var verified, created, updated string
-	if err := row.Scan(&s.BaseURL, &s.Username, &s.CookieJarJSON, &s.UserAgent, &verified, &created, &updated); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
+	sessions, err := r.load()
+	if err != nil {
+		return nil, err
+	}
+	var latest *model.Session
+	for i := range sessions {
+		if sessions[i].BaseURL != baseURL {
+			continue
 		}
-		return nil, fmt.Errorf("query session: %w: %w", err, errs.ErrStore)
+		if latest == nil || sessions[i].UpdatedAt.After(latest.UpdatedAt) {
+			s := sessions[i]
+			latest = &s
+		}
 	}
-	var err error
-	s.LastVerifiedAt, err = time.Parse(time.RFC3339Nano, verified)
-	if err != nil {
-		return nil, fmt.Errorf("parse last_verified_at: %w: %w", err, errs.ErrStore)
-	}
-	s.CreatedAt, err = time.Parse(time.RFC3339Nano, created)
-	if err != nil {
-		return nil, fmt.Errorf("parse created_at: %w: %w", err, errs.ErrStore)
-	}
-	s.UpdatedAt, err = time.Parse(time.RFC3339Nano, updated)
-	if err != nil {
-		return nil, fmt.Errorf("parse updated_at: %w: %w", err, errs.ErrStore)
-	}
-	return &s, nil
+	return latest, nil
 }
 
 func (r *SessionRepo) Upsert(ctx context.Context, s model.Session) error {
@@ -73,17 +68,25 @@ func (r *SessionRepo) Upsert(ctx context.Context, s model.Session) error {
 	if s.LastVerifiedAt.IsZero() {
 		s.LastVerifiedAt = s.UpdatedAt
 	}
-	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO sessions (base_url, email, cookie_jar_json, user_agent, last_verified_at, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(base_url, email) DO UPDATE SET
-			cookie_jar_json = excluded.cookie_jar_json,
-			user_agent = excluded.user_agent,
-			last_verified_at = excluded.last_verified_at,
-			updated_at = excluded.updated_at
-	`, s.BaseURL, s.Username, s.CookieJarJSON, s.UserAgent, s.LastVerifiedAt.Format(time.RFC3339Nano), s.CreatedAt.Format(time.RFC3339Nano), s.UpdatedAt.Format(time.RFC3339Nano))
+
+	r.st.mu.Lock()
+	defer r.st.mu.Unlock()
+
+	sessions, err := r.load()
 	if err != nil {
-		return fmt.Errorf("upsert session: %w: %w", err, errs.ErrStore)
+		return err
 	}
-	return nil
+	replaced := false
+	for i := range sessions {
+		if sessions[i].BaseURL == s.BaseURL && sessions[i].Username == s.Username {
+			s.CreatedAt = sessions[i].CreatedAt
+			sessions[i] = s
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		sessions = append(sessions, s)
+	}
+	return writeJSON(r.st.sessionPath(), sessions)
 }

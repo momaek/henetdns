@@ -17,7 +17,7 @@ Configure via command-line flags or environment variables:
 | Flag | Environment | Description |
 |------|-------------|-------------|
 | `--base-url` | `HENETDNS_BASE_URL` | HE DNS base URL (default: `https://dns.he.net`) |
-| `--db-path` | `HENETDNS_DB_PATH` | SQLite db path (default: `~/.config/henetdns/client.db`) |
+| `--data-dir` | `HENETDNS_DATA_DIR` | Data directory for session and cache (default: `~/.config/henetdns`) |
 | `--username` | `HE_USERNAME` or `HE_EMAIL` | Account username |
 | `--password` | `HE_PASS` | Account password |
 | `--timeout` | `HENETDNS_TIMEOUT` | HTTP timeout (default: `20s`) |
@@ -51,7 +51,7 @@ henetdns records list --zone example.com --refresh
 
 ### Cache Behavior
 
-- Default list behavior is cache-first. It reads local SQLite cache first, then falls back to remote fetch when cache is empty.
+- Default list behavior is cache-first. It reads the local `cache.json` first, then falls back to remote fetch when cache is empty.
 - `--cache-only` reads only local cache and never sends remote requests.
 - `--refresh` bypasses local cache, always fetches from remote, and refreshes cache.
 - `--cache-only` and `--refresh` cannot be used together.
@@ -97,52 +97,19 @@ henetdns records delete \
 - CNAME
 - MX
 
-## MCP Server
+## AI Agent Integration
 
-henetdns can run as a [Model Context Protocol (MCP)](https://modelcontextprotocol.io) stdio server, exposing DNS management as tools for AI agents (e.g. Claude Desktop).
-
-### Setup
-
-**1. Login once via CLI:**
+No MCP server is needed. Any shell-capable agent (Claude Code, OpenClaw, etc.) drives henetdns directly through the CLI — every command supports `--json` for machine-readable output.
 
 ```bash
-henetdns login --username your_username
+henetdns login --username your_username   # once; session saved to session.json
+henetdns zones list --json
+henetdns records list --zone example.com --json
+henetdns records upsert --zone example.com --type A --name www --value 1.2.3.4 --json
 ```
 
-The session cookie is saved to SQLite. The MCP server reuses it automatically — credentials never enter the MCP layer.
-
-**2. Start the server:**
-
-```bash
-henetdns mcp serve
-```
-
-### Claude Desktop Configuration
-
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
-
-```json
-{
-  "mcpServers": {
-    "henetdns": {
-      "command": "henetdns",
-      "args": ["mcp", "serve"]
-    }
-  }
-}
-```
-
-### Available Tools
-
-| Tool | Description |
-|------|-------------|
-| `list_zones` | List all DNS zones. Uses cache by default; `refresh: true` fetches from HE.net. |
-| `list_records` | List records for a zone (by name or ID). Cache-first; supports `refresh`. |
-| `upsert_record` | Create a record if it doesn't already exist (idempotent). |
-| `delete_record` | Delete an exact matching record. |
-
-If the session expires, tools return: `"No active session. Run 'henetdns login' to authenticate, then retry."` — re-run `henetdns login` and the server resumes without restart.
+A ready-to-use agent skill lives in [`skills/henetdns/`](skills/henetdns/SKILL.md): point your agent at it and it knows the commands, flags, JSON shapes, and typical workflows.
 
 ## Data Storage
 
-Session cookies and cached data are stored in SQLite at `~/.config/henetdns/client.db` by default.
+Session cookies and cached data are stored as JSON files under `~/.config/henetdns/` by default (`session.json` and `cache.json`).

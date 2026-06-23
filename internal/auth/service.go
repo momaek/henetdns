@@ -23,12 +23,11 @@ const sessionVerifyTTL = 5 * time.Minute
 type Service struct {
 	client      *httpclient.Client
 	sessionRepo *store.SessionRepo
-	auditRepo   *store.AuditRepo
 	userAgent   string
 }
 
-func NewService(client *httpclient.Client, sessionRepo *store.SessionRepo, auditRepo *store.AuditRepo, userAgent string) *Service {
-	return &Service{client: client, sessionRepo: sessionRepo, auditRepo: auditRepo, userAgent: userAgent}
+func NewService(client *httpclient.Client, sessionRepo *store.SessionRepo, userAgent string) *Service {
+	return &Service{client: client, sessionRepo: sessionRepo, userAgent: userAgent}
 }
 
 func (s *Service) Login(ctx context.Context, username, password string) error {
@@ -37,7 +36,6 @@ func (s *Service) Login(ctx context.Context, username, password string) error {
 	}
 
 	if _, err := s.client.Get(ctx, "/", ""); err != nil {
-		s.audit("login", nil, "failed", err)
 		return err
 	}
 
@@ -49,24 +47,18 @@ func (s *Service) Login(ctx context.Context, username, password string) error {
 
 	resp, err := s.client.PostForm(ctx, "/", form, s.client.BaseURL().String())
 	if err != nil {
-		s.audit("login", nil, "failed", err)
 		return err
 	}
 
 	if IsLoginPage(resp.Body) {
-		err = fmt.Errorf("login failed: credentials rejected or additional verification required: %w", errs.ErrAuthRequired)
-		s.audit("login", nil, "failed", err)
-		return err
+		return fmt.Errorf("login failed: credentials rejected or additional verification required: %w", errs.ErrAuthRequired)
 	}
 	if !IsLoggedInBody(resp.Body) {
-		err = fmt.Errorf("login response did not match known success markers; site structure may have changed: %w", errs.ErrParseChanged)
-		s.audit("login", nil, "failed", err)
-		return err
+		return fmt.Errorf("login response did not match known success markers; site structure may have changed: %w", errs.ErrParseChanged)
 	}
 
 	cookieJSON, err := SerializeCookieJarForBaseURL(s.client.HTTPClient().Jar, s.client.BaseURL())
 	if err != nil {
-		s.audit("login", nil, "failed", err)
 		return fmt.Errorf("serialize cookies: %w", err)
 	}
 
@@ -81,11 +73,9 @@ func (s *Service) Login(ctx context.Context, username, password string) error {
 		CreatedAt:      now,
 	}
 	if err := s.sessionRepo.Upsert(ctx, session); err != nil {
-		s.audit("login", nil, "failed", err)
 		return err
 	}
 
-	s.audit("login", nil, "ok", nil)
 	return nil
 }
 
@@ -190,22 +180,4 @@ func RestoreCookieJarForBaseURL(jar http.CookieJar, baseURL *url.URL, serialized
 
 func NewCookieJar() (http.CookieJar, error) {
 	return cookiejar.New(nil)
-}
-
-func (s *Service) audit(action string, zoneID *string, status string, err error) {
-	if s.auditRepo == nil {
-		return
-	}
-	entry := model.AuditLog{
-		Action:             action,
-		ZoneID:             zoneID,
-		RequestSummaryJSON: "{}",
-		ResultStatus:       status,
-		CreatedAt:          time.Now().UTC(),
-	}
-	if err != nil {
-		msg := err.Error()
-		entry.ErrorMessage = &msg
-	}
-	_ = s.auditRepo.Insert(context.Background(), entry)
 }
