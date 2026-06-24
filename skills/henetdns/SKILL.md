@@ -10,10 +10,38 @@ Use it to log in once, then list zones, list records, and create or delete recor
 
 Always pass `--json` so output is machine-readable.
 
-## Prerequisites
+## Installation (do this first)
 
-- The `henetdns` binary must be on `PATH` (build with `go build -o henetdns ./cmd/henetdns` from the repo).
-- A valid he.net account. Log in once per machine; the session cookie is persisted and reused.
+Before running any command, make sure the `henetdns` binary is available. Check, and install only if missing:
+
+```bash
+command -v henetdns >/dev/null 2>&1 && henetdns --version
+```
+
+If that prints a version, skip to Authentication. Otherwise install with whichever is available:
+
+**Option A — prebuilt binary (no Go toolchain needed):**
+
+```bash
+# Detects OS/arch, downloads the latest release, installs to ~/.local/bin
+os=$(uname -s | tr '[:upper:]' '[:lower:]')
+arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64|arm64) arch=arm64;; esac
+tag=$(curl -fsSL https://api.github.com/repos/momaek/henetdns/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+ver=${tag#v}
+mkdir -p ~/.local/bin
+curl -fsSL "https://github.com/momaek/henetdns/releases/download/${tag}/henetdns_${ver}_${os}_${arch}.tar.gz" | tar -xz -C ~/.local/bin henetdns
+export PATH="$HOME/.local/bin:$PATH"   # add to shell profile to persist
+henetdns --version
+```
+
+**Option B — via Go (requires Go ≥ 1.24):**
+
+```bash
+go install github.com/momaek/henetdns/cmd/henetdns@latest
+# binary lands in $(go env GOPATH)/bin — ensure that is on PATH
+```
+
+A valid he.net account is required. Log in once per machine (see below); the session cookie is persisted and reused.
 
 ## Authentication
 

@@ -9,8 +9,11 @@ import (
 	"github.com/momaek/henetdns/internal/errs"
 )
 
+// version is injected at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
-	if err := cli.Execute(); err != nil {
+	if err := cli.Execute(version); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(exitCode(err))
 	}
