@@ -7,15 +7,16 @@ import (
 
 var cfg config.Config
 
-func Execute() error {
-	root := newRootCmd()
+func Execute(version string) error {
+	root := newRootCmd(version)
 	return root.Execute()
 }
 
-func newRootCmd() *cobra.Command {
+func newRootCmd(version string) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "henetdns",
-		Short: "CLI for Hurricane Electric hosted DNS",
+		Use:     "henetdns",
+		Short:   "CLI for Hurricane Electric hosted DNS",
+		Version: version,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			config.ApplyEnv(&cfg)
 			return config.ValidateCommon(cfg)
