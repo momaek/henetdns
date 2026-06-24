@@ -1,99 +1,72 @@
 package store
 
 import (
-	"context"
-	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-
-	_ "modernc.org/sqlite"
+	"sync"
 
 	"github.com/momaek/henetdns/internal/errs"
 )
 
-type DB struct {
-	sql *sql.DB
+// Store is a small file-backed store rooted at a data directory. It replaces
+// the previous SQLite database: a CLI is single-user and single-host, so a
+// couple of JSON files are simpler and dependency-free.
+//
+//	<dir>/session.json  saved login sessions (cookie jars)
+//	<dir>/cache.json    zones + records cache (cached-first optimization)
+type Store struct {
+	dir string
+	mu  sync.Mutex // guards read-modify-write of cache.json
 }
 
-func Open(path string) (*DB, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return nil, fmt.Errorf("create db dir: %w: %w", err, errs.ErrStore)
+// Open ensures the data directory exists and returns a Store rooted at it.
+func Open(dir string) (*Store, error) {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("create data dir: %w: %w", err, errs.ErrStore)
 	}
-	db, err := sql.Open("sqlite", path)
+	return &Store{dir: dir}, nil
+}
+
+// Close is a no-op; it exists so callers can treat Store like the old DB handle.
+func (s *Store) Close() error { return nil }
+
+func (s *Store) sessionPath() string { return filepath.Join(s.dir, "session.json") }
+func (s *Store) cachePath() string   { return filepath.Join(s.dir, "cache.json") }
+
+// readJSON loads a JSON file into v. A missing file is not an error: v is left
+// untouched and (false, nil) is returned.
+func readJSON(path string, v any) (bool, error) {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
 	if err != nil {
-		return nil, fmt.Errorf("open sqlite: %w: %w", err, errs.ErrStore)
+		return false, fmt.Errorf("read %s: %w: %w", filepath.Base(path), err, errs.ErrStore)
 	}
-	conn := &DB{sql: db}
-	if err := conn.migrate(context.Background()); err != nil {
-		db.Close()
-		return nil, err
+	if len(data) == 0 {
+		return false, nil
 	}
-	return conn, nil
+	if err := json.Unmarshal(data, v); err != nil {
+		return false, fmt.Errorf("parse %s: %w: %w", filepath.Base(path), err, errs.ErrStore)
+	}
+	return true, nil
 }
 
-func (d *DB) SQL() *sql.DB {
-	return d.sql
-}
-
-func (d *DB) Close() error {
-	if d == nil || d.sql == nil {
-		return nil
+// writeJSON atomically writes v as indented JSON to path (temp file + rename).
+func writeJSON(path string, v any) error {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode %s: %w: %w", filepath.Base(path), err, errs.ErrStore)
 	}
-	return d.sql.Close()
-}
-
-func (d *DB) migrate(ctx context.Context) error {
-	if _, err := d.sql.ExecContext(ctx, schemaSQL); err != nil {
-		return fmt.Errorf("migrate schema: %w: %w", err, errs.ErrStore)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return fmt.Errorf("write %s: %w: %w", filepath.Base(path), err, errs.ErrStore)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("commit %s: %w: %w", filepath.Base(path), err, errs.ErrStore)
 	}
 	return nil
 }
-
-const schemaSQL = `
-CREATE TABLE IF NOT EXISTS sessions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  base_url TEXT NOT NULL,
-  email TEXT NOT NULL,
-  cookie_jar_json TEXT NOT NULL,
-  user_agent TEXT,
-  last_verified_at TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  UNIQUE(base_url, email)
-);
-
-CREATE TABLE IF NOT EXISTS zones_cache (
-  zone_id TEXT PRIMARY KEY,
-  zone_name TEXT NOT NULL,
-  raw_json TEXT NOT NULL,
-  last_synced_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS records_cache (
-  zone_id TEXT NOT NULL,
-  record_uid TEXT NOT NULL,
-  record_id TEXT NOT NULL,
-  name TEXT NOT NULL,
-  type TEXT NOT NULL,
-  value TEXT NOT NULL,
-  ttl INTEGER,
-  priority INTEGER,
-  dynamic INTEGER NOT NULL,
-  locked INTEGER NOT NULL,
-  raw_json TEXT NOT NULL,
-  last_synced_at TEXT NOT NULL,
-  PRIMARY KEY(zone_id, record_uid)
-);
-
-CREATE TABLE IF NOT EXISTS audit_logs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  action TEXT NOT NULL,
-  zone_id TEXT,
-  request_summary_json TEXT NOT NULL,
-  result_status TEXT NOT NULL,
-  error_message TEXT,
-  created_at TEXT NOT NULL
-);
-`

@@ -17,7 +17,7 @@ go install github.com/momaek/henetdns/cmd/henetdns@latest
 | 参数 | 环境变量 | 说明 |
 |------|----------|------|
 | `--base-url` | `HENETDNS_BASE_URL` | HE DNS 基础地址（默认：`https://dns.he.net`） |
-| `--db-path` | `HENETDNS_DB_PATH` | SQLite 数据库路径（默认：`~/.config/henetdns/client.db`） |
+| `--data-dir` | `HENETDNS_DATA_DIR` | 会话与缓存的数据目录（默认：`~/.config/henetdns`） |
 | `--username` | `HE_USERNAME` 或 `HE_EMAIL` | 账号用户名 |
 | `--password` | `HE_PASS` | 账号密码 |
 | `--timeout` | `HENETDNS_TIMEOUT` | HTTP 超时时间（默认：`20s`） |
@@ -84,7 +84,7 @@ henetdns records delete \
 
 ## 缓存行为
 
-- 默认 list 行为是“缓存优先”：先读本地 SQLite 缓存，缓存为空时再回源请求。
+- 默认 list 行为是“缓存优先”：先读本地 `cache.json`，缓存为空时再回源请求。
 - `--cache-only` 仅读取本地缓存，不发起远端请求。
 - `--refresh` 跳过本地缓存，强制回源并刷新缓存。
 - `--cache-only` 与 `--refresh` 不能同时使用。
@@ -97,52 +97,19 @@ henetdns records delete \
 - CNAME
 - MX
 
-## MCP Server
+## AI Agent 集成
 
-henetdns 支持以 [Model Context Protocol (MCP)](https://modelcontextprotocol.io) stdio server 模式运行，将 DNS 管理能力作为工具暴露给 AI Agent（如 Claude Desktop）。
-
-### 配置步骤
-
-**1. 通过 CLI 登录一次：**
+不需要 MCP server。任何能跑 shell 的 agent（Claude Code、OpenClaw 等）直接通过 CLI 驱动 henetdns——每个命令都支持 `--json` 输出机器可读结果。
 
 ```bash
-henetdns login --username your_username
+henetdns login --username your_username   # 登录一次，session 写入 session.json
+henetdns zones list --json
+henetdns records list --zone example.com --json
+henetdns records upsert --zone example.com --type A --name www --value 1.2.3.4 --json
 ```
 
-Session cookie 写入 SQLite，MCP server 自动复用，密码不会进入 MCP 层。
-
-**2. 启动 server：**
-
-```bash
-henetdns mcp serve
-```
-
-### Claude Desktop 配置
-
-添加到 `~/Library/Application Support/Claude/claude_desktop_config.json`（macOS）或 `%APPDATA%\Claude\claude_desktop_config.json`（Windows）：
-
-```json
-{
-  "mcpServers": {
-    "henetdns": {
-      "command": "henetdns",
-      "args": ["mcp", "serve"]
-    }
-  }
-}
-```
-
-### 可用工具
-
-| 工具 | 说明 |
-|------|------|
-| `list_zones` | 列出所有 DNS Zone。默认缓存优先，`refresh: true` 从 HE.net 拉取。 |
-| `list_records` | 列出指定 Zone 的记录（支持 Zone 名称或 ID）。缓存优先，支持 `refresh`。 |
-| `upsert_record` | 幂等创建记录，完全匹配时不重复创建。 |
-| `delete_record` | 删除精确匹配的记录。 |
-
-Session 过期时工具返回：`"No active session. Run 'henetdns login' to authenticate, then retry."` — 重新执行 `henetdns login` 即可，无需重启 server。
+仓库内置了一个开箱即用的 agent skill：[`skills/henetdns/`](skills/henetdns/SKILL.md)，把 agent 指向它即可，里面有全部命令、参数、JSON 结构和典型工作流。
 
 ## 数据存储
 
-会话 Cookie 和缓存数据默认存储在 `~/.config/henetdns/client.db`。
+会话 Cookie 和缓存数据默认以 JSON 文件形式存储在 `~/.config/henetdns/`（`session.json` 与 `cache.json`）。

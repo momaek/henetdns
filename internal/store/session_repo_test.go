@@ -2,22 +2,23 @@ package store
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/momaek/henetdns/internal/model"
 )
 
-func TestSessionUpsertGet(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "test.db")
-	db, err := Open(dbPath)
+func newTestRepo(t *testing.T) *SessionRepo {
+	t.Helper()
+	st, err := Open(t.TempDir())
 	if err != nil {
-		t.Fatalf("open db: %v", err)
+		t.Fatalf("open store: %v", err)
 	}
-	defer db.Close()
+	return NewSessionRepo(st)
+}
 
-	repo := NewSessionRepo(db.SQL())
+func TestSessionUpsertGet(t *testing.T) {
+	repo := newTestRepo(t)
 	now := time.Now().UTC()
 	s := model.Session{
 		BaseURL:        "https://dns.he.net",
@@ -41,14 +42,7 @@ func TestSessionUpsertGet(t *testing.T) {
 }
 
 func TestSessionGetLatestByBaseURL(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "test-latest.db")
-	db, err := Open(dbPath)
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	defer db.Close()
-
-	repo := NewSessionRepo(db.SQL())
+	repo := newTestRepo(t)
 	now := time.Now().UTC()
 	s1 := model.Session{
 		BaseURL:        "https://dns.he.net",

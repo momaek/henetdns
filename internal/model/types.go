@@ -31,12 +31,3 @@ type Record struct {
 	Locked       bool      `json:"locked"`
 	LastSyncedAt time.Time `json:"last_synced_at,omitempty"`
 }
-
-type AuditLog struct {
-	Action             string
-	ZoneID             *string
-	RequestSummaryJSON string
-	ResultStatus       string
-	ErrorMessage       *string
-	CreatedAt          time.Time
-}
