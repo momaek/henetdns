@@ -6,6 +6,22 @@
 
 ## 安装
 
+推荐从 [Releases 页面](https://github.com/momaek/henetdns/releases/latest)下载对应平台的预编译二进制（无需 Go 环境），或直接执行：
+
+```bash
+# 自动识别 OS/架构，下载最新 release 并安装到 ~/.local/bin
+os=$(uname -s | tr '[:upper:]' '[:lower:]')
+arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64|arm64) arch=arm64;; esac
+tag=$(curl -fsSL https://api.github.com/repos/momaek/henetdns/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+mkdir -p ~/.local/bin
+curl -fsSL "https://github.com/momaek/henetdns/releases/download/${tag}/henetdns_${tag#v}_${os}_${arch}.tar.gz" | tar -xz -C ~/.local/bin henetdns
+henetdns --version   # 确保 ~/.local/bin 在 PATH 中
+```
+
+Windows 用户请在 Releases 页面下载对应架构的 `.zip`。
+
+也可以用 Go ≥ 1.24 从源码安装：
+
 ```bash
 go install github.com/momaek/henetdns/cmd/henetdns@latest
 ```

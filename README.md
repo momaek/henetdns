@@ -6,6 +6,22 @@ CLI tool for Hurricane Electric hosted DNS management.
 
 ## Installation
 
+Download the prebuilt binary for your platform from the [Releases page](https://github.com/momaek/henetdns/releases/latest) (no Go toolchain needed), or run:
+
+```bash
+# Detects OS/arch, downloads the latest release, installs to ~/.local/bin
+os=$(uname -s | tr '[:upper:]' '[:lower:]')
+arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64|arm64) arch=arm64;; esac
+tag=$(curl -fsSL https://api.github.com/repos/momaek/henetdns/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+mkdir -p ~/.local/bin
+curl -fsSL "https://github.com/momaek/henetdns/releases/download/${tag}/henetdns_${tag#v}_${os}_${arch}.tar.gz" | tar -xz -C ~/.local/bin henetdns
+henetdns --version   # ensure ~/.local/bin is on PATH
+```
+
+On Windows, download the `.zip` for your architecture from the Releases page.
+
+Alternatively, build from source with Go ≥ 1.24:
+
 ```bash
 go install github.com/momaek/henetdns/cmd/henetdns@latest
 ```
