@@ -38,5 +38,7 @@ func newRootCmd(version string) *cobra.Command {
 	cmd.AddCommand(newLoginCmd())
 	cmd.AddCommand(newZonesCmd())
 	cmd.AddCommand(newRecordsCmd())
+	cmd.AddCommand(newVersionCmd(version))
+	cmd.AddCommand(newUpgradeCmd(version))
 	return cmd
 }

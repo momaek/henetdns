@@ -41,6 +41,8 @@ go install github.com/momaek/henetdns/cmd/henetdns@latest
 # binary lands in $(go env GOPATH)/bin — ensure that is on PATH
 ```
 
+If `henetdns` is already installed but seems outdated (e.g. a documented flag or command is missing), run `henetdns upgrade --json` to self-update to the latest release, or `henetdns version --check --json` to compare first. There is no background update check.
+
 A valid he.net account is required. Log in once per machine (see below); the session cookie is persisted and reused.
 
 ## Authentication
