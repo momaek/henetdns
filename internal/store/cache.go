@@ -87,6 +87,23 @@ func (r *ZoneRepo) FindIDByName(ctx context.Context, zoneName string) (string, b
 	return "", false, nil
 }
 
+func (r *ZoneRepo) FindNameByID(ctx context.Context, zoneID string) (string, bool, error) {
+	zoneID = strings.TrimSpace(zoneID)
+	if zoneID == "" {
+		return "", false, nil
+	}
+	data, err := r.st.loadCache()
+	if err != nil {
+		return "", false, err
+	}
+	for _, z := range data.Zones {
+		if z.ID == zoneID {
+			return z.Name, true, nil
+		}
+	}
+	return "", false, nil
+}
+
 // RecordRepo caches records per zone (cached-first lookups).
 type RecordRepo struct {
 	st *Store

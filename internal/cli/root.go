@@ -17,6 +17,10 @@ func newRootCmd(version string) *cobra.Command {
 		Use:     "henetdns",
 		Short:   "CLI for Hurricane Electric hosted DNS",
 		Version: version,
+		// Runtime failures (auth, no matching record, ...) are not usage
+		// mistakes; main prints the error once with an exit code.
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			config.ApplyEnv(&cfg)
 			return config.ValidateCommon(cfg)
