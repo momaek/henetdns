@@ -26,6 +26,17 @@ Windows 用户请在 Releases 页面下载对应架构的 `.zip`。
 go install github.com/momaek/henetdns/cmd/henetdns@latest
 ```
 
+## 升级
+
+CLI 不会在后台偷偷检查更新，只在你主动执行时联网：
+
+```bash
+henetdns version --check   # 对比当前版本与 GitHub 最新 release
+henetdns upgrade           # 下载最新 release 并原地替换当前二进制
+```
+
+`upgrade` 会先校验 release 的 checksum 再替换二进制；已是最新版本时不做任何操作（`--force` 可强制重装）。两个命令都支持 `--json`。
+
 ## 配置
 
 可通过命令行参数或环境变量配置：

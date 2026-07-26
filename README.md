@@ -26,6 +26,17 @@ Alternatively, build from source with Go ≥ 1.24:
 go install github.com/momaek/henetdns/cmd/henetdns@latest
 ```
 
+## Upgrading
+
+The CLI never phones home — update checks only run when you ask:
+
+```bash
+henetdns version --check   # compare the current version with the latest GitHub release
+henetdns upgrade           # download the latest release and replace this binary in place
+```
+
+`upgrade` verifies the release checksum before swapping the binary and is a no-op when already up to date (`--force` reinstalls anyway). Both commands support `--json`.
+
 ## Configuration
 
 Configure via command-line flags or environment variables:
