@@ -81,6 +81,7 @@ henetdns records upsert --zone example.com --type A --name www --value 1.2.3.4 -
 ```
 
 - Supported types: `A`, `AAAA`, `TXT`, `CNAME`, `MX`.
+- `--name` accepts a short name (`www`), a fully-qualified name (`www.example.com`), or `@` for the zone apex — all equivalent.
 - `--ttl` defaults to 300.
 - Creates the record only if an identical one does not already exist, so it is safe to re-run.
 - For `MX`, set priority with `--priority N --priority-set` (defaults to 10).
@@ -91,7 +92,7 @@ henetdns records upsert --zone example.com --type A --name www --value 1.2.3.4 -
 henetdns records delete --zone example.com --type A --name www --value 1.2.3.4 --json
 ```
 
-All of `--type`, `--name`, `--value` must match an existing record exactly. For `MX`, also pass `--priority N --priority-set`. Locked records cannot be deleted.
+All of `--type`, `--name`, `--value` must match an existing record exactly. `--name` accepts short or fully-qualified names (see upsert). For `TXT` records, pass `--value` with or without the surrounding double quotes shown in `records list` output — both match. For `MX`, also pass `--priority N --priority-set`. Locked records cannot be deleted. When no record matches, the error lists close matches (same name, other type/value) to help correct the command.
 
 ## Output Shapes (`--json`)
 

@@ -70,6 +70,8 @@ henetdns records upsert \
   --priority-set
 ```
 
+`--name` 可以是短名（`www`）、完整域名（`www.example.com`），或用 `@` 表示 zone 根域名。
+
 ### 删除记录
 
 删除完全匹配的记录：
@@ -81,6 +83,8 @@ henetdns records delete \
   --name www \
   --value 192.168.1.1
 ```
+
+`TXT` 记录的 `--value` 带不带 `records list` 输出中的外层双引号都可以匹配。未找到匹配记录时，错误信息会列出近似候选（同名的其他类型/值）方便排查。
 
 ## 缓存行为
 

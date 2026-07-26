@@ -149,11 +149,33 @@ func (s *Service) ListRecordsCachedFirst(ctx context.Context, zoneID string) ([]
 	return s.ListRecords(ctx, zoneID)
 }
 
+// resolveZoneName maps a zone ID back to its zone name, cache-first with a
+// remote fallback. Returns "" when the zone cannot be resolved; callers treat
+// that as "leave the record name as given".
+func (s *Service) resolveZoneName(ctx context.Context, zoneID string) string {
+	if s.zoneRepo != nil {
+		if name, found, err := s.zoneRepo.FindNameByID(ctx, zoneID); err == nil && found {
+			return name
+		}
+	}
+	zones, err := s.ListZones(ctx)
+	if err != nil {
+		return ""
+	}
+	for _, z := range zones {
+		if z.ID == zoneID {
+			return z.Name
+		}
+	}
+	return ""
+}
+
 func (s *Service) UpsertRecord(ctx context.Context, zoneID string, in RecordInput) error {
 	normalized, err := normalizeRecordInput(in)
 	if err != nil {
 		return err
 	}
+	normalized.Name = qualifyRecordName(normalized.Name, s.resolveZoneName(ctx, zoneID))
 	records, err := s.ListRecords(ctx, zoneID)
 	if err != nil {
 		return err
@@ -202,13 +224,18 @@ func (s *Service) DeleteRecord(ctx context.Context, zoneID string, in RecordInpu
 	if err != nil {
 		return err
 	}
+	normalized.Name = qualifyRecordName(normalized.Name, s.resolveZoneName(ctx, zoneID))
 	records, err := s.ListRecords(ctx, zoneID)
 	if err != nil {
 		return err
 	}
 	match, found := findExactRecord(records, normalized)
 	if !found {
-		return fmt.Errorf("record not found for delete: %w", errs.ErrInvalidInput)
+		msg := fmt.Sprintf("record not found for delete (type=%s name=%s value=%s)", normalized.Type, normalized.Name, normalized.Value)
+		if hints := nearMissHints(records, normalized); hints != "" {
+			msg += "; close matches: " + hints
+		}
+		return fmt.Errorf("%s: %w", msg, errs.ErrInvalidInput)
 	}
 	if match.Locked {
 		return fmt.Errorf("record %s is locked and cannot be deleted: %w", match.RecordID, errs.ErrInvalidInput)
@@ -263,6 +290,41 @@ func normalizeRecordInput(in RecordInput) (RecordInput, error) {
 	return in, nil
 }
 
+// qualifyRecordName expands a short record name to its fully-qualified form
+// within zone, so `www` and `www.example.com` address the same record. `@` and
+// an empty name mean the zone apex. Unknown zone leaves the name untouched.
+func qualifyRecordName(name, zone string) string {
+	name = strings.TrimSuffix(strings.TrimSpace(name), ".")
+	zone = strings.TrimSuffix(strings.TrimSpace(zone), ".")
+	if zone == "" {
+		return name
+	}
+	if name == "" || name == "@" {
+		return zone
+	}
+	if strings.EqualFold(name, zone) || strings.HasSuffix(strings.ToLower(name), "."+strings.ToLower(zone)) {
+		return name
+	}
+	return name + "." + zone
+}
+
+// normalizeTXTValue strips one pair of surrounding double quotes so the bare
+// token matches the quoted form he.net returns in record listings.
+func normalizeTXTValue(v string) string {
+	v = strings.TrimSpace(v)
+	if len(v) >= 2 && strings.HasPrefix(v, `"`) && strings.HasSuffix(v, `"`) {
+		v = v[1 : len(v)-1]
+	}
+	return v
+}
+
+func recordValueEqual(rrType, a, b string) bool {
+	if rrType == "TXT" {
+		return normalizeTXTValue(a) == normalizeTXTValue(b)
+	}
+	return strings.TrimSpace(a) == strings.TrimSpace(b)
+}
+
 func findExactRecord(records []model.Record, in RecordInput) (model.Record, bool) {
 	for _, r := range records {
 		if !strings.EqualFold(r.Type, in.Type) {
@@ -271,7 +333,7 @@ func findExactRecord(records []model.Record, in RecordInput) (model.Record, bool
 		if !strings.EqualFold(strings.TrimSuffix(r.Name, "."), strings.TrimSuffix(in.Name, ".")) {
 			continue
 		}
-		if strings.TrimSpace(r.Value) != strings.TrimSpace(in.Value) {
+		if !recordValueEqual(in.Type, r.Value, in.Value) {
 			continue
 		}
 		if in.Type == "MX" {
@@ -285,6 +347,23 @@ func findExactRecord(records []model.Record, in RecordInput) (model.Record, bool
 		return r, true
 	}
 	return model.Record{}, false
+}
+
+// nearMissHints lists records sharing the requested name (any type/value), so
+// a failed exact match points at the mismatching field instead of a dead end.
+func nearMissHints(records []model.Record, in RecordInput) string {
+	const maxHints = 5
+	var hints []string
+	for _, r := range records {
+		if !strings.EqualFold(strings.TrimSuffix(r.Name, "."), strings.TrimSuffix(in.Name, ".")) {
+			continue
+		}
+		hints = append(hints, fmt.Sprintf("[%s %s %s]", r.Type, r.Name, r.Value))
+		if len(hints) == maxHints {
+			break
+		}
+	}
+	return strings.Join(hints, " ")
 }
 
 func isDigits(v string) bool {

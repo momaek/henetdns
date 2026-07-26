@@ -77,6 +77,8 @@ henetdns records upsert \
   --priority-set
 ```
 
+`--name` accepts a short name (`www`), a fully-qualified name (`www.example.com`), or `@` for the zone apex.
+
 ### Delete Record
 
 Delete exact matching record:
@@ -88,6 +90,8 @@ henetdns records delete \
   --name www \
   --value 192.168.1.1
 ```
+
+For `TXT` records, `--value` matches with or without the surrounding double quotes shown in `records list` output. When no record matches, the error lists close matches (same name, other type/value).
 
 ## Supported Record Types
 
