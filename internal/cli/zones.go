@@ -7,12 +7,40 @@ import (
 
 	"github.com/momaek/henetdns/internal/app"
 	"github.com/momaek/henetdns/internal/errs"
+	"github.com/momaek/henetdns/internal/model"
 	"github.com/momaek/henetdns/internal/output"
 )
 
 func newZonesCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "zones", Short: "Zone operations"}
 	cmd.AddCommand(newZonesListCmd())
+	cmd.AddCommand(newZonesAddCmd())
+	return cmd
+}
+
+func newZonesAddCmd() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:   "add <domain>",
+		Short: "Add a primary zone (no-op if it already exists)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return app.WithRuntime(cfg, func(rt *app.Runtime) error {
+				if err := rt.Auth.EnsureSession(cmd.Context(), cfg.Username); err != nil {
+					return err
+				}
+				zone, created, err := rt.HENet.AddZone(cmd.Context(), args[0])
+				if err != nil {
+					return err
+				}
+				if !created {
+					fmt.Fprintf(cmd.ErrOrStderr(), "zone %s already exists\n", zone.Name)
+				}
+				return output.PrintZones(cmd.OutOrStdout(), []model.Zone{zone}, jsonOut)
+			})
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "output as JSON")
 	return cmd
 }
 
