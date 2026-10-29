@@ -1,6 +1,6 @@
 ---
 name: henetdns
-description: Manage Hurricane Electric (he.net) hosted DNS from the command line with the henetdns CLI. Use when an agent needs to log in to he.net, list DNS zones, list records, or create/delete A/AAAA/TXT/CNAME/MX records. Drives the CLI directly over the shell — no MCP server or extra configuration required.
+description: Manage Hurricane Electric (he.net) hosted DNS from the command line with the henetdns CLI. Use when an agent needs to log in to he.net, list DNS zones, list records, or create/delete records (A, AAAA, CNAME, MX, TXT, SRV, CAA, NS, and every other type the he.net editor offers). Drives the CLI directly over the shell — no MCP server or extra configuration required.
 ---
 
 # henetdns
@@ -68,6 +68,14 @@ henetdns zones list --json
 
 Cache-first by default. Add `--refresh` to fetch live from he.net (needs a session), or `--cache-only` to never touch the network.
 
+### Add a zone
+
+```bash
+henetdns zones add example.com --json
+```
+
+Creates a primary zone; if it already exists, prints it unchanged with a note on stderr. Output is an array with the one zone, `[{ "id", "name" }]`. The zone only serves once the registrar points the domain at `ns1.he.net`-`ns5.he.net`.
+
 ### List records in a zone
 
 ```bash
@@ -82,7 +90,9 @@ henetdns records list --zone example.com --json
 henetdns records upsert --zone example.com --type A --name www --value 1.2.3.4 --json
 ```
 
-- Supported types: `A`, `AAAA`, `TXT`, `CNAME`, `MX`.
+- Supported types: every type the he.net zone editor offers (`A`, `AAAA`, `AFSDB`, `ALIAS`, `CAA`, `CNAME`, `HINFO`, `HTTPS`, `LOC`, `MX`, `NAPTR`, `NS`, `PTR`, `RP`, `SPF`, `SRV`, `SSHFP`, `SVCB`, `TXT`).
+- `SRV` values are `"weight port target"` with `--priority N --priority-set`, or the zone-file form `"priority weight port target"`. Priority defaults to 0.
+- `--ttl` must be one of 300, 900, 1800, 3600, 7200, 14400, 28800, 43200, 86400, 172800.
 - `--name` accepts a short name (`www`), a fully-qualified name (`www.example.com`), or `@` for the zone apex — all equivalent.
 - `--ttl` defaults to 300.
 - Creates the record only if an identical one does not already exist, so it is safe to re-run.

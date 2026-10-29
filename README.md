@@ -67,6 +67,16 @@ henetdns zones list --cache-only
 henetdns zones list --refresh
 ```
 
+### Add Zone
+
+Add a primary zone, as with "Add a new domain" on the he.net dashboard. If the zone already exists it is printed unchanged (with a note on stderr), so the command is safe to re-run.
+
+```bash
+henetdns zones add example.com --json
+```
+
+he.net warns that a new zone is not properly delegated until the registrar points the domain's nameservers at `ns1.he.net` through `ns5.he.net`; that warning is not treated as an error.
+
 ### List Records
 
 ```bash
@@ -85,7 +95,7 @@ henetdns records list --zone example.com --refresh
 
 ### Upsert Record
 
-Create record if not exists (exact match by type, name, value, and priority for MX):
+Create record if not exists (exact match by type, name, value, and priority for MX/SRV):
 
 ```bash
 henetdns records upsert \
@@ -102,7 +112,23 @@ henetdns records upsert \
   --value mail.example.com \
   --priority 10 \
   --priority-set
+
+# SRV: value is "weight port target" with --priority, or the zone-file form
+# "priority weight port target". Priority defaults to 0.
+henetdns records upsert \
+  --zone example.com \
+  --type SRV \
+  --name _imaps._tcp \
+  --value "0 1 993 imap.example.net"
+
+henetdns records upsert \
+  --zone example.com \
+  --type CAA \
+  --name @ \
+  --value '0 issue "letsencrypt.org"'
 ```
+
+`--ttl` must be one of the values the he.net zone editor offers: 300, 900, 1800, 3600, 7200, 14400, 28800, 43200, 86400, 172800.
 
 `--name` accepts a short name (`www`), a fully-qualified name (`www.example.com`), or `@` for the zone apex.
 
@@ -122,11 +148,13 @@ For `TXT` records, `--value` matches with or without the surrounding double quot
 
 ## Supported Record Types
 
-- A
-- AAAA
-- TXT
-- CNAME
-- MX
+All types offered by the he.net zone editor:
+
+A, AAAA, AFSDB, ALIAS, CAA, CNAME, HINFO, HTTPS, LOC, MX, NAPTR, NS, PTR, RP, SPF, SRV, SSHFP, SVCB, TXT
+
+- `MX` and `SRV` take `--priority N --priority-set` (defaults: MX 10, SRV 0).
+- Hostname values (CNAME, MX, NS, ALIAS, PTR, SRV target) match case-insensitively and ignore a trailing dot.
+- Deleting an `NS` record at the zone apex is refused, since it would break delegation for the whole zone.
 
 ## AI Agent Integration
 
