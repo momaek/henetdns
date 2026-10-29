@@ -184,26 +184,7 @@ func (s *Service) UpsertRecord(ctx context.Context, zoneID string, in RecordInpu
 		return nil
 	}
 
-	form := url.Values{}
-	form.Set("menu", "edit_zone")
-	form.Set("Type", normalized.Type)
-	form.Set("hosted_dns_zoneid", zoneID)
-	form.Set("hosted_dns_recordid", "")
-	form.Set("hosted_dns_editzone", "1")
-	form.Set("Name", normalized.Name)
-	form.Set("Content", normalized.Value)
-	form.Set("TTL", strconv.Itoa(normalized.TTL))
-	if normalized.Type == "MX" {
-		if normalized.HasPriority {
-			form.Set("Priority", strconv.Itoa(normalized.Priority))
-		} else {
-			form.Set("Priority", "10")
-		}
-	} else {
-		form.Set("Priority", "")
-	}
-	form.Set("hosted_dns_editrecord", "Submit")
-
+	form := buildCreateForm(zoneID, normalized)
 	_, err = s.client.PostForm(ctx, "/index.cgi", form, s.client.BaseURL().String()+ZonePagePath(zoneID))
 	if err != nil {
 		return err
@@ -224,7 +205,11 @@ func (s *Service) DeleteRecord(ctx context.Context, zoneID string, in RecordInpu
 	if err != nil {
 		return err
 	}
-	normalized.Name = qualifyRecordName(normalized.Name, s.resolveZoneName(ctx, zoneID))
+	zoneName := s.resolveZoneName(ctx, zoneID)
+	normalized.Name = qualifyRecordName(normalized.Name, zoneName)
+	if isApexNS(normalized, zoneName) {
+		return fmt.Errorf("refusing to delete NS record at zone apex %s (it delegates the whole zone; use the he.net web UI if you really mean it): %w", normalized.Name, errs.ErrInvalidInput)
+	}
 	records, err := s.ListRecords(ctx, zoneID)
 	if err != nil {
 		return err
@@ -264,6 +249,42 @@ func (s *Service) DeleteRecord(ctx context.Context, zoneID string, in RecordInpu
 	return nil
 }
 
+// SupportedTypes lists the record types he.net's zone editor offers. All of
+// them except MX and SRV use the same Name/Content/TTL formlet.
+var SupportedTypes = []string{
+	"A", "AAAA", "AFSDB", "ALIAS", "CAA", "CNAME", "HINFO", "HTTPS", "LOC",
+	"MX", "NAPTR", "NS", "PTR", "RP", "SPF", "SRV", "SSHFP", "SVCB", "TXT",
+}
+
+// ValidTTLs are the only values he.net's TTL <select> offers.
+var ValidTTLs = []int{300, 900, 1800, 3600, 7200, 14400, 28800, 43200, 86400, 172800}
+
+// hostnameTypes hold a single hostname as their value; he.net lists them
+// without a trailing dot and DNS names compare case-insensitively.
+var hostnameTypes = map[string]bool{"CNAME": true, "MX": true, "NS": true, "ALIAS": true, "PTR": true}
+
+func isSupportedType(t string) bool {
+	for _, s := range SupportedTypes {
+		if s == t {
+			return true
+		}
+	}
+	return false
+}
+
+func isValidTTL(ttl int) bool {
+	for _, v := range ValidTTLs {
+		if v == ttl {
+			return true
+		}
+	}
+	return false
+}
+
+func hasPriorityField(rrType string) bool {
+	return rrType == "MX" || rrType == "SRV"
+}
+
 func normalizeRecordInput(in RecordInput) (RecordInput, error) {
 	in.Type = strings.ToUpper(strings.TrimSpace(in.Type))
 	in.Name = strings.TrimSpace(in.Name)
@@ -271,23 +292,118 @@ func normalizeRecordInput(in RecordInput) (RecordInput, error) {
 	if in.Type == "" || in.Name == "" || in.Value == "" {
 		return in, fmt.Errorf("type/name/value are required: %w", errs.ErrInvalidInput)
 	}
-	supported := map[string]bool{"A": true, "AAAA": true, "TXT": true, "CNAME": true, "MX": true}
-	if !supported[in.Type] {
-		return in, fmt.Errorf("unsupported type %q in MVP: %w", in.Type, errs.ErrInvalidInput)
+	if !isSupportedType(in.Type) {
+		return in, fmt.Errorf("unsupported type %q (supported: %s): %w", in.Type, strings.Join(SupportedTypes, ", "), errs.ErrInvalidInput)
 	}
 	if in.TTL <= 0 {
 		in.TTL = 300
 	}
-	if in.Type == "MX" {
+	if !isValidTTL(in.TTL) {
+		return in, fmt.Errorf("ttl %d not offered by he.net (valid: %s): %w", in.TTL, joinInts(ValidTTLs), errs.ErrInvalidInput)
+	}
+	if hostnameTypes[in.Type] {
+		in.Value = strings.TrimSuffix(in.Value, ".")
+	}
+	switch in.Type {
+	case "MX":
 		if !in.HasPriority {
 			in.Priority = 10
 			in.HasPriority = true
 		}
-		if in.Priority < 0 {
-			return in, fmt.Errorf("priority must be >= 0: %w", errs.ErrInvalidInput)
+	case "SRV":
+		srv, err := normalizeSRV(in)
+		if err != nil {
+			return in, err
 		}
+		in = srv
+	}
+	if hasPriorityField(in.Type) && (in.Priority < 0 || in.Priority > 65535) {
+		return in, fmt.Errorf("priority must be 0-65535: %w", errs.ErrInvalidInput)
 	}
 	return in, nil
+}
+
+// normalizeSRV accepts the value as "weight port target" (the form he.net
+// lists, with priority in its own column) or as the zone-file form
+// "priority weight port target" when no explicit priority was given.
+// Priority defaults to 0.
+func normalizeSRV(in RecordInput) (RecordInput, error) {
+	fields := strings.Fields(in.Value)
+	if len(fields) == 4 && !in.HasPriority {
+		p, err := strconv.Atoi(fields[0])
+		if err != nil {
+			return in, fmt.Errorf("SRV priority %q is not a number: %w", fields[0], errs.ErrInvalidInput)
+		}
+		in.Priority = p
+		in.HasPriority = true
+		fields = fields[1:]
+	}
+	if len(fields) != 3 {
+		return in, fmt.Errorf(`SRV value must be "weight port target" (or "priority weight port target" without --priority-set), got %q: %w`, in.Value, errs.ErrInvalidInput)
+	}
+	for i, label := range []string{"weight", "port"} {
+		n, err := strconv.Atoi(fields[i])
+		if err != nil || n < 0 || n > 65535 {
+			return in, fmt.Errorf("SRV %s must be 0-65535, got %q: %w", label, fields[i], errs.ErrInvalidInput)
+		}
+	}
+	fields[2] = strings.TrimSuffix(fields[2], ".")
+	in.Value = strings.Join(fields, " ")
+	if !in.HasPriority {
+		in.Priority = 0
+		in.HasPriority = true
+	}
+	return in, nil
+}
+
+// buildCreateForm mirrors the he.net formlet for the record type
+// (/formlets/<type>.html). SRV is the only type that splits its value into
+// separate Weight/Port/Target fields instead of a single Content field.
+func buildCreateForm(zoneID string, in RecordInput) url.Values {
+	form := url.Values{}
+	form.Set("menu", "edit_zone")
+	form.Set("Type", in.Type)
+	form.Set("hosted_dns_zoneid", zoneID)
+	form.Set("hosted_dns_recordid", "")
+	form.Set("hosted_dns_editzone", "1")
+	form.Set("Name", in.Name)
+	form.Set("TTL", strconv.Itoa(in.TTL))
+	if hasPriorityField(in.Type) {
+		form.Set("Priority", strconv.Itoa(in.Priority))
+	} else {
+		form.Set("Priority", "")
+	}
+	if in.Type == "SRV" {
+		fields := strings.Fields(in.Value)
+		form.Set("Weight", fields[0])
+		form.Set("Port", fields[1])
+		form.Set("Target", fields[2])
+	} else {
+		form.Set("Content", in.Value)
+	}
+	form.Set("hosted_dns_editrecord", "Submit")
+	return form
+}
+
+// isApexNS reports whether in is an NS record at the zone apex. Deleting
+// those breaks delegation for the entire zone, and he.net does not lock them.
+func isApexNS(in RecordInput, zoneName string) bool {
+	if in.Type != "NS" {
+		return false
+	}
+	name := strings.TrimSuffix(in.Name, ".")
+	if name == "@" || name == "" {
+		return true
+	}
+	return zoneName != "" && strings.EqualFold(name, strings.TrimSuffix(zoneName, "."))
+}
+
+func joinInts(vs []int) string {
+	parts := make([]string, len(vs))
+	for i, v := range vs {
+		parts[i] = strconv.Itoa(v)
+	}
+	return strings.Join(parts, ", ")
 }
 
 // qualifyRecordName expands a short record name to its fully-qualified form
@@ -319,8 +435,18 @@ func normalizeTXTValue(v string) string {
 }
 
 func recordValueEqual(rrType, a, b string) bool {
-	if rrType == "TXT" {
+	switch {
+	case rrType == "TXT" || rrType == "SPF":
 		return normalizeTXTValue(a) == normalizeTXTValue(b)
+	case hostnameTypes[rrType]:
+		return strings.EqualFold(strings.TrimSuffix(strings.TrimSpace(a), "."), strings.TrimSuffix(strings.TrimSpace(b), "."))
+	case rrType == "SRV":
+		fa, fb := strings.Fields(a), strings.Fields(b)
+		if len(fa) != 3 || len(fb) != 3 {
+			return strings.Join(fa, " ") == strings.Join(fb, " ")
+		}
+		return fa[0] == fb[0] && fa[1] == fb[1] &&
+			strings.EqualFold(strings.TrimSuffix(fa[2], "."), strings.TrimSuffix(fb[2], "."))
 	}
 	return strings.TrimSpace(a) == strings.TrimSpace(b)
 }
@@ -336,7 +462,7 @@ func findExactRecord(records []model.Record, in RecordInput) (model.Record, bool
 		if !recordValueEqual(in.Type, r.Value, in.Value) {
 			continue
 		}
-		if in.Type == "MX" {
+		if hasPriorityField(in.Type) {
 			if r.Priority == nil {
 				continue
 			}

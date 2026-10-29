@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -131,12 +133,12 @@ func newRecordsUpsertCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&zone, "zone", "", "zone name or zone id")
-	cmd.Flags().StringVar(&rrType, "type", "", "record type (A/AAAA/TXT/CNAME/MX)")
+	cmd.Flags().StringVar(&rrType, "type", "", "record type: "+strings.Join(henet.SupportedTypes, ", "))
 	cmd.Flags().StringVar(&name, "name", "", "record name")
-	cmd.Flags().StringVar(&value, "value", "", "record value")
-	cmd.Flags().IntVar(&ttl, "ttl", 300, "record ttl")
-	cmd.Flags().IntVar(&priority, "priority", 10, "priority for MX")
-	cmd.Flags().BoolVar(&hasPriority, "priority-set", false, "set when --priority should be used for MX")
+	cmd.Flags().StringVar(&value, "value", "", `record value (SRV: "weight port target")`)
+	cmd.Flags().IntVar(&ttl, "ttl", 300, "record ttl, one of: "+joinTTLs())
+	cmd.Flags().IntVar(&priority, "priority", 10, "priority for MX/SRV")
+	cmd.Flags().BoolVar(&hasPriority, "priority-set", false, "set when --priority should be used (MX defaults to 10, SRV to 0)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output as JSON")
 	return cmd
 }
@@ -170,11 +172,19 @@ func newRecordsDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&zone, "zone", "", "zone name or zone id")
-	cmd.Flags().StringVar(&rrType, "type", "", "record type (A/AAAA/TXT/CNAME/MX)")
+	cmd.Flags().StringVar(&rrType, "type", "", "record type: "+strings.Join(henet.SupportedTypes, ", "))
 	cmd.Flags().StringVar(&name, "name", "", "record name")
-	cmd.Flags().StringVar(&value, "value", "", "record value")
-	cmd.Flags().IntVar(&priority, "priority", 10, "priority for MX")
-	cmd.Flags().BoolVar(&hasPriority, "priority-set", false, "set when --priority should be used for MX")
+	cmd.Flags().StringVar(&value, "value", "", `record value (SRV: "weight port target")`)
+	cmd.Flags().IntVar(&priority, "priority", 10, "priority for MX/SRV")
+	cmd.Flags().BoolVar(&hasPriority, "priority-set", false, "set when --priority should be used (MX defaults to 10, SRV to 0)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output as JSON")
 	return cmd
+}
+
+func joinTTLs() string {
+	parts := make([]string, len(henet.ValidTTLs))
+	for i, v := range henet.ValidTTLs {
+		parts[i] = strconv.Itoa(v)
+	}
+	return strings.Join(parts, ", ")
 }
